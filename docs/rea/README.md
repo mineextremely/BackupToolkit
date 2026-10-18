@@ -1,0 +1,108 @@
+# BackupToolkit v1.1.1（备份工具箱）逆向分析总览
+
+> 目标：搞清楚这个第三方「全量备份工具」是怎么实现的，为后续重构提供依据。
+> **本阶段只产出分析文档，未编写任何业务代码。**
+
+---
+
+## 0. REA 的接入状态（实测，2026-xx 复核）
+
+REA **是装好的**，但**没有进入本会话**。事实链（`rea doctor --json` 实测）：
+
+| 项 | 状态 |
+|---|---|
+| **skill manager（`@michengai/dsh-skills-manager`）** | ✅ 已扫到并**已启用**：`/api/dsh-skills-manager/state` → root `agents` = `~\.agents\skills`，`exists=true enabled=true`，其中 `reverse-engineer-anything` = `enabled:true`（`ccswitch`/`claude` 另有同名副本） |
+| skill 内容是否进了本会话 | ❌ 否：本会话无 `skill` 工具，`%DSH_HOME%\sessions` 17 个文件内检索不到该名称 → 需 agent 主动 `read` 路径 |
+| CLI | `rea@6.5.0` 可用（`npx -y rea-agents@latest`），153 命令 |
+| **MCP 注册 `dsh`（DeepSeek Harness）** | ❌ **missing** → `harness\cordis.patch.yml` 未写入 → 本会话拿不到 207 个 MCP 工具（**skill 通道修不了这一条**） |
+| provider `jadx` | ❌ 未配置 → Android **代码类**工具不可用（需 caller-supplied `jadx-headless-mcp 0.7.1` JAR） |
+| provider `apktool` | ✅ 已用 `REA_APKTOOL_COMMAND` 指向本地 `apktool.jar` 跑通 |
+| provider hopper / ghidra / ida | ❌ 缺失（与 APK 任务无关） |
+
+> 关键区分：**技能（怎么做）** 走 skill manager → DSH skills 子系统；**工具（能做什么）** 走 MCP 注册。二者互不替代。
+
+因此本次是**混合证据**：
+
+1. **REA 原生 Evidence**（走 CLI）：`inspect-apktool-client`、`decode-android-resources`、`inspect-artifact` —— 提供 manifest/字符串/ZIP 清单的可核验台账；
+2. **REA 家族之外的静态反编译**：直接用 jadx 1.5.6 反编译 DEX（因为 `jadx` provider 缺 JAR）—— 代码级结论出自这里，**已明确标注不在 REA 台账内**，但路径与行号可复核。
+
+证据索引与置信度分级见 **`00-REA证据台账.md`**（含 Evidence ID、观测/推断/未知三分、剩余缺口与下一步探针）。
+
+**未做动态验证**：`adb devices` 无设备，亦无模拟器；REA 也明示静态分析不构成执行证据。凡推测处均标注「推断」。
+
+---
+
+## 1. 一句话结论
+
+它是一个 **「Java 壳 + 常驻 root 守护进程 + 内嵌 shell 脚本引擎」** 的 root 备份工具：
+
+- **权限模型**：不自带 native root 提权，完全依赖设备已 root；用 **libsu 5.x**（被 R8 混淆）通过 `app_process` + 内置 `assets/main.jar` 拉起 **root 身份常驻进程**，再由该进程提供 AIDL 服务（包管理/IPC 文件 IO）；
+- **备份引擎**：真正的备份逻辑**不在 Java 里，而在 `res/raw/root_shrc.sh` 这个 335 行 shell 脚本里**。App 启动时把它 `source` 进 root shell，之后 Java 只负责「拼一行命令」：`app_backup <pkg> <时间戳> 'apk&&user&&data'`；
+- **数据面**：`busybox tar` 打包 + `zstd` 压缩（也支持 gz/xz/lz4，因为全交给 zstd 的 `--format=` 处理），自定义 `toolkit` 小 ELF 只提供 `stat` 能力（取 size/uid）；
+- **元数据**：fastjson2 写的 `!BackupInfo!<pkg>.json`（备份列表）+ `config.json`（备份根目录版本）；图标存 `!icon!<pkg>`；
+- **UI 进程零存储权限**：连 `!BackupInfo!.json` 都是通过 root 服务的 `IFileSystemService` 读写的，因此 Manifest 里只声明了 `INTERACT_ACROSS_USERS` 一个权限，没有 `MANAGE_EXTERNAL_STORAGE`；
+- **来源**：包名 `r2ixzp.toolkit`、签名 `CN=r2ixzp`、图标是 Android 默认图标、资源全中文、更新日志自 1.0.0 起为中文手写 —— 这是对一个开源/第三方备份工具**重新签名的二次分发构建**（改动点见 `01-包结构与身份.md`）。
+
+---
+
+## 2. 文档索引
+
+| 文档 | 内容 |
+|---|---|
+| `00-REA证据台账.md` | **REA 接入状态、Evidence ID 台账、观测/推断/未知三分、缺口与下一步探针** |
+| `01-包结构与身份.md` | 包信息、签名、组件清单、DEX/资源/资产结构、依赖库清单、来源判定 |
+| `02-启动链与权限架构.md` | 双进程模型、libsu root 守护进程、AIDL 契约全表、启动时序、环境部署 |
+| `03-备份恢复引擎.md` | `root_shrc.sh` 逐函数语义、备份/恢复/APK 安装算法、文件布局 |
+| `04-数据格式与元数据.md` | JSON schema、文件名规范、SharedPreferences 全键表、日志 |
+| `05-功能清单.md` | 字符串级功能矩阵、三档备份选项语义、多用户/存储/云备份实现 |
+| `06-混淆与防篡改.md` | R8 关键字重命名、XOR 字符串表、签名自校验门禁、破解点 |
+| `07-缺陷与风险.md` | 功能死代码、算法缺陷、安全与稳定性风险清单 |
+| `08-重构蓝图.md` | 目标架构、模块边界、格式 v2 设计、迁移策略、验证方案 |
+| `附录A-root_shrc-注释.md` | 内嵌 shell 引擎全文 + 逐段中文注释（重构最核心的参考件） |
+
+## 3. 分析产物位置
+
+```
+BackupToolkit v1.1.1.apk        原始文件
+docs/rea/                       本次分析文档
+re/
+  apktool/                      apktool 3.0.3 解码结果（资源可读、smali 完整）
+  jadx/                         jadx 1.5.6 反编译的 Java 源码（480 个类）
+  jadx_mainjar/                 assets/main.jar 内 root server dex 的反编译结果
+  bin/<abi>/                    从 assets/bin/*.zip 解出的 busybox / toolkit / zstd
+  tools/                        apktool.jar、jadx（本次下载的分析工具）
+```
+
+## 4. 复现命令
+
+```powershell
+# 资源/Manifest 解码
+java -jar re\tools\apktool.jar d "BackupToolkit v1.1.1.apk" -o re\apktool -f
+
+# DEX 反编译（480 类，18 处 jadx 报错，不影响主体）
+re\tools\jadx\bin\jadx.bat -d re\jadx --show-bad-code "BackupToolkit v1.1.1.apk"
+
+# 内置 root server 单独反编译
+re\tools\jadx\bin\jadx.bat -d re\jadx_mainjar .\re\mainjar
+
+# 签名证书
+keytool -printcert -jarfile "BackupToolkit v1.1.1.apk"
+
+# 资产解包（busybox/zstd/toolkit、main.jar）
+python - <<'PY'
+import zipfile
+zipfile.ZipFile("re/apktool/assets/main.jar").extractall("re/mainjar")
+for abi in ["arm64-v8a","armeabi-v7a","x86_64","x86"]:
+    zipfile.ZipFile(f"re/apktool/assets/bin/{abi}.zip").extractall(f"re/bin/{abi}")
+PY
+```
+
+## 5. 复刻所需的最小知识集（如果你只想看 5 分钟）
+
+1. 备份就是 `tar -c <路径> --exclude=... | zstd -3 --format=zstd -fo <时间戳>-<part>.tar.zst`；
+2. 三个备份档位是 `apk`（安装包+obb）/ `user`（`/data/user*/<uid>/<pkg>`，排除 lib/oat/cache/code_cache/no_backup）/ `data`（`/sdcard/Android/data/<pkg>`，排除 cache）；
+3. 恢复是「先 `mv` 成 `_old` → 解包 → `chown -hR uid:uid` → `restorecon/chcon` → 成功才删 `_old`，失败回滚」；
+4. APK 恢复走 `pm install-create/write/commit` 会话（分包），兼容模式改用 stdin 管道 `cat apk | pm install -S <size>`；
+5. 备份期间用 `killall -s STOP` / `-s CONT` 冻结被备份应用，恢复前 `am force-stop`；
+6. 元数据是一个 per-package 的 JSON，文件名即备份时间戳；
+7. 全部能力建立在**已 root** 的前提上，没有任何绕过或自提权。

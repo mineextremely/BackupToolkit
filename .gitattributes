@@ -1,0 +1,13 @@
+# 默认 LF，便于在 WSL2 / Linux 下直接运行脚本
+* text=auto eol=lf
+
+*.sh   text eol=lf
+*.py   text eol=lf
+*.md   text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+
+*.png  binary
+*.jar  binary
+*.zip  binary
+*.apk  binary

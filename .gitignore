@@ -1,0 +1,21 @@
+# ---- 分析目标（第三方 APK，不再分发）----
+*.apk
+*.apk.idsig
+
+# ---- 分析产物：可从 APK 重新生成，且含第三方二进制/反编译代码，不入库 ----
+re/tools/
+re/bin/
+re/apktool/
+re/jadx/
+re/mainjar/
+re/jadx_mainjar/
+re/evidence/asar-*.txt
+
+# ---- 本地临时 ----
+*.log
+*.tmp
+__pycache__/
+.venv/
+venv/
+.DS_Store
+Thumbs.db
