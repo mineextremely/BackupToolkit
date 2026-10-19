@@ -5,30 +5,26 @@
 
 ---
 
-## 0. REA 的接入状态（实测，2026-xx 复核）
+## 0. REA 接入状态（WSL2 实测，2026-10-19）
 
-REA **是装好的**，但**没有进入本会话**。事实链（`rea doctor --json` 实测）：
+REA MCP 已在本会话可用，代码级结论已产出 Evidence ID；环境细节与完整台账见 `00-REA证据台账.md` §8。
 
 | 项 | 状态 |
 |---|---|
-| **skill manager（`@michengai/dsh-skills-manager`）** | ✅ 已扫到并**已启用**：`/api/dsh-skills-manager/state` → root `agents` = `~\.agents\skills`，`exists=true enabled=true`，其中 `reverse-engineer-anything` = `enabled:true`（`ccswitch`/`claude` 另有同名副本） |
-| skill 内容是否进了本会话 | ❌ 否：本会话无 `skill` 工具，`%DSH_HOME%\sessions` 17 个文件内检索不到该名称 → 需 agent 主动 `read` 路径 |
-| CLI | `rea@6.5.0` 可用（`npx -y rea-agents@latest`），153 命令 |
-| **MCP 注册 `dsh`（DeepSeek Harness）** | ❌ **missing** → `harness\cordis.patch.yml` 未写入 → 本会话拿不到 207 个 MCP 工具（**skill 通道修不了这一条**） |
-| provider `jadx` | ❌ 未配置 → Android **代码类**工具不可用（需 caller-supplied `jadx-headless-mcp 0.7.1` JAR） |
-| provider `apktool` | ✅ 已用 `REA_APKTOOL_COMMAND` 指向本地 `apktool.jar` 跑通 |
-| provider hopper / ghidra / ida | ❌ 缺失（与 APK 任务无关） |
+| REA MCP | ✅ `rea-agents 6.7.0`（`npx -y rea-agents@6.7.0 mcp`），SDK 2.3.1，207 tools；`claude mcp list` 显示 Connected |
+| skill | ✅ `reverse-engineer-anything` v42 / 207，`state=aligned`（`~/.claude/skills/`） |
+| `jadx` provider | ✅ `jadx-headless-mcp 0.7.1`，JAR sha256 `6e5eacf5…ff75`；端到端 `inspect_android_package` 成功（`class_count=656`） |
+| `apktool` provider | ✅ `/usr/local/bin/apktool` 3.0.3 |
+| 宿主 | WSL2 Debian 13；OpenJDK 21.0.12.1 |
+| Ghidra / Hopper / IDA / Kuna | 未配置；经评估本 APK **不需要**（唯一自研原生程序 `toolkit` 已用 `objdump` 完整还原） |
 
-> 关键区分：**技能（怎么做）** 走 skill manager → DSH skills 子系统；**工具（能做什么）** 走 MCP 注册。二者互不替代。
+证据分层：
 
-因此本次是**混合证据**：
+1. **REA 原生 Evidence**：包/类/方法/引用（`inspect_android_package`、`inspect_android_class`、`inspect_android_method`、`trace_android_references`）→ 台账 §8；
+2. **直接反编译/反汇编观测**：jadx CLI、apktool、`readelf`/`objdump`（含 `assets/bin/*`）→ 文中标注路径/哈希；
+3. **动态验证**：仍未执行（无设备/模拟器）。
 
-1. **REA 原生 Evidence**（走 CLI）：`inspect-apktool-client`、`decode-android-resources`、`inspect-artifact` —— 提供 manifest/字符串/ZIP 清单的可核验台账；
-2. **REA 家族之外的静态反编译**：直接用 jadx 1.5.6 反编译 DEX（因为 `jadx` provider 缺 JAR）—— 代码级结论出自这里，**已明确标注不在 REA 台账内**，但路径与行号可复核。
-
-证据索引与置信度分级见 **`00-REA证据台账.md`**（含 Evidence ID、观测/推断/未知三分、剩余缺口与下一步探针）。
-
-**未做动态验证**：`adb devices` 无设备，亦无模拟器；REA 也明示静态分析不构成执行证据。凡推测处均标注「推断」。
+历史 Windows/DSH 接入过程保留在 `00-REA证据台账.md` §1–§7。
 
 ---
 

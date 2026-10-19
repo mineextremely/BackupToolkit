@@ -2,7 +2,7 @@
 
 > 本文件按 REA 规程记录：**观测（observed）/ 推断（inference）/ 未知（unknown）三分**，每条结论都挂 Evidence ID 或明确标注「证据来源不在 REA 台账内」。
 
-## 1. 会话与环境（实测）
+## 1. 会话与环境（历史：Windows/DSH；当前 WSL2 环境见 §8）
 
 | 项 | 值 | 来源 |
 |---|---|---|
@@ -67,6 +67,8 @@ REA 明示的限制（照抄，不当成结论）：
 
 ### 3.2 静态反编译观测（D，路径可复核）
 
+> 2026-10-19 复核：以下主要条目已由 §8 的 REA Evidence 复核；未重跑的条目仍按 D 级标注。
+
 | 结论 | 位置 |
 |---|---|
 | libsu root 服务通道：`app_process <64> -Xnoimage-dex2oat --nice-name=<pkg>:root:daemon … RootServerMain '<component>' <uid> daemon` | `re/jadx/sources/Intent/Cnew.java` |
@@ -95,7 +97,7 @@ REA 明示的限制（照抄，不当成结论）：
 
 | 项 | 原因 |
 |---|---|
-| 代码级 REA 证据（`inspect_android_package`、`search_android_classes`、`inspect_android_method`、`trace_android_references`） | `jadx` provider 未配置（缺 caller-supplied `jadx-headless-mcp 0.7.1` JAR）→ 本次以「直接 jadx 1.5.6 反编译」替代，结论可复核但不在 REA 台账内 |
+| 代码级 REA 证据（`inspect_android_package`、`search_android_classes`、`inspect_android_method`、`trace_android_references`） | ✅ 已在 §8 解决：WSL2 下 JADX provider 端到端可用，关键类/方法/引用已产出 Evidence ID |
 | APK 签名方案（v2/v3 块完整性） | `inspect_artifact` 只覆盖 ZIP 中央目录；v1/v2 判定用的 `keytool` 输出属外部工具观测 |
 | 运行时行为（root shell 实际执行、`killall -STOP` 在某些 ROM 的表现、libsu 11s 超时语义） | 无设备/模拟器（`adb devices` 为空），REA 也明示静态分析不代表执行 |
 | 94 个条目中 `res/*.xml|*.png` 的混淆命名与资源的精确对应 | `decode_android_resources` 已解出 manifest/strings，但布局-类绑定未逐一核对 |
@@ -110,7 +112,7 @@ REA 明示的限制（照抄，不当成结论）：
 
 ## 5. 与其他文档的关系
 
-`01`–`08` 与 `附录A` 的内容**全部来自 §3.2 的静态反编译观测与 §3.1 的 REA 观测**；本文档提供其证据索引与置信度分级。若后续补齐 JADX provider，应把 §3.2 的每条结论升级为 REA Evidence 引用，并复核是否出现矛盾（当前 `contradictions: []`）。
+`01`–`08` 与 `附录A` 的内容**全部来自 §3.2 的静态反编译观测与 §3.1 的 REA 观测**；本文档提供其证据索引与置信度分级。JADX provider 已于 WSL2 补齐；§3.2 的主要代码级结论已在 §8 升级为 REA Evidence 引用，复核未发现矛盾（`contradictions: []`）。
 
 ---
 
@@ -307,4 +309,112 @@ list_classes → 共 656 条，含 Activity.Cthrow / Intent.Cnew / Intent.Cimpor
 
 ⇒ **独立佐证**：DEX 中真实类名就是 `Service.Cthrow`、`Intent.Cnew`、`p000abstract.*` 这类「包名/类名被替换成关键字或系统类名」的形态，与 `06-混淆与防篡改.md` 的判断一致（jadx 1.5.6 与 JADX MCP 两条独立工具链给出相同命名）。
 
-**后续**：待 REA 修复 Windows 派生问题（或换 Linux/macOS 宿主）后，`inspect_android_package` / `inspect_android_method` / `trace_android_references` 即可直接产出带 Evidence ID 的代码级记录；在此之前，代码级结论仍以 §3.2 的「静态反编译观测」标注，并由上述 `xcheck-jadx.py` 交叉核对。
+**后续**：Windows 上的派生问题未在 Linux 复现。WSL2 会话已用 `inspect_android_package` / `inspect_android_class` / `inspect_android_method` / `trace_android_references` 产出代码级 Evidence，见 §8。§3.2 中未单独重跑的条目仍按「静态反编译观测」标注，并可由 `xcheck-jadx.py` 交叉核对。
+
+---
+
+## 8. WSL2 会话：代码级 REA Evidence 化（2026-10-19）
+
+### 8.1 环境（实测）
+
+| 项 | 值 | 来源 |
+|---|---|---|
+| REA | `rea-agents 6.7.0`，SDK `2.3.1`，207 MCP tools | `binary_session` / `doctor --client claude_code --json` |
+| skill | `reverse-engineer-anything` v42 / 207，`state=aligned` | 同上 |
+| 宿主 | WSL2 Debian 13，Linux x64；Node 24.22.0 | 同上 |
+| JDK | OpenJDK `21.0.12.1` | `rea_jvm_status`（随 Android 工具返回） |
+| `jadx` provider | `jadx-headless-mcp 0.7.1`，JAR sha256 `6e5eacf500b64292bfb73c49797c1958f6ee44646e43e868039ae7feb573ff75`；手工 stdio 握手 26 tools | doctor + 独立探针 |
+| `apktool` provider | `/usr/local/bin/apktool` **3.0.3**，`command_source=environment` | `ev_475e7aa8012eb8b9a04eaff0a4d1fe0886fa12638ddb489fce1c0008999366ab` |
+| 目标 | `BackupToolkit v1.1.1.apk`，sha256 `4af201230efa6670b5b377a240c7748e58f27bf89456e3c41e845e6e1c3566f4` | `inspect_android_package` |
+
+### 8.2 本次 Evidence（按主题）
+
+**包与类清单**
+
+| Evidence ID | 操作 | 关键事实 |
+|---|---|---|
+| `ev_25afa605aefa11cb6b5a9cbc7642b7c4c62025b50b9f6cea8e289bacc31d81ed` | `inspect_android_package`（summary） | `r2ixzp.toolkit` 1.1.1/1113，minSdk 21 / targetSdk 34，仅 `INTERACT_ACROSS_USERS`；`class_count=656`、`resource_count=93`；引擎 `jadx-headless-mcp 0.7.1` |
+| `ev_95c066ebee116c3e3be98ffe8c89ff208383d5678ae0574a7cb77613e69dd85d` | `search_android_classes` `Cwhile` | 38 个同名类，确认 `p004class.Cwhile` 存在 |
+| `ev_4234914f8198fdb345e7867401826a9dc3b8478bc7ab6bbcff6e61673f54763f` | `search_android_classes` `Cimport` | 30 个同名类；真正的编排器是 `c.Cimport` |
+| `ev_f506917931a081ebe2d989f16f60af00abf9a332059f8d418a0395aac04642c3` | `search_android_classes` `Cnew` | `Intent.Cnew` 唯一相关命中 |
+| `ev_c69137de3cf12b73b26512a977fe891084a6e4774952d9138a02a1a25e5c2708`、`ev_006f085da053cd47e8de6ddea54ef4a78a07c694db010eb756abfa95397a7e56`、`ev_b0378852137178a13ae28fe0a57159a435ce3ca631906725992e2fecd75c2cec` | 类名搜索 `aidl` / `IRootManager` / `IBackupManager` | **0 个顶层类名命中**：三个 AIDL 名称只作为 `attachInterface`/`queryLocalInterface` 字符串存在，接口实现类被 R8 改名 |
+
+**签名门禁与字符串解密**
+
+| Evidence ID | 操作 | 关键事实 |
+|---|---|---|
+| `ev_3d955511b91be4fe6dece984f3aecd7757bd31c94c48d18aa3ced0c826f80a7f` | `inspect_android_class` `p004class.Cwhile` | 2 方法：`<init>`、`mo8continue(Intent): IBinder`；字段 `f665package=77`、`f666finally=Cnative` |
+| `ev_53ad62c5c52a754a6952a5d588096188899aac4032d3d1328c3a5d5f5eb16615` | `inspect_android_method` `p004class.Cwhile.mo8continue` | JADX 把 `onBind` 改名为 `mo8continue`；取签名 → SHA-256 → Base64(…,2) → 与常量比较，成功才 `new Cnative(this)`；异常吞掉并返回字段（失败为 null） |
+| `ev_da28a20ed559f95098a1d671d6ef47334d4eb4766c2a99682d0f57b6c151d3ce` | `inspect_android_method` `p005const.Cthrow.m914true` | `cArr[i] ^= this.f1637extends`，**最后一个字符不参与异或** |
+| `ev_3528c24fc4808a6ba6761a1b1a288f545746587cb242cacbda387d17879d1f61` | `inspect_android_method` `p005const.Cthrow.<init>` | 初始 `f1637extends = 1047` |
+| `ev_0d4729e68c07d6bfa1f1cd8811bb0045f474a31959fb48a2d8bdf9a89e3cdc1e` | `inspect_android_method` `p005const.Cthrow.mo13strictfp` | `f1637extends = ((1047 ^ 1113) ^ getPackageName().length()) + 13`；本包 = `((1047^1113)^14)+13 = 77`；并置 `p003catch.Cthrow.f658extends=true` |
+| `ev_56a9bac3a162f17444bc57bea9ccd698f1275ade8bd76cdccebc4d38608f4680` | `inspect_android_method` `Activity.Cthrow.attachBaseContext` | `attachBaseContext` 末尾 **虚调用 `mo13strictfp()`**；即密钥在 Service attach 阶段才变成 77 |
+| `ev_c504acf6af3f3fbff9a4efcef184bafbafa093f3de06c16308e661c545634bf8` | `inspect_android_method` `p004class.Cwhile.<init>` | 仅 `invoke-direct p005const.Cthrow.<init>`，不设置密钥 |
+| `ev_77a485c689f7ae06a18e1be0d2ec2b2c4f67ed73d2341baf7639533c280e5f73` | `trace_android_references` `Activity.Cthrow.mo8continue` | 唯一 using node：`Intent.Cclass.c`，`INVOKE_VIRTUAL`，DEX code-unit 103 |
+| `ev_218ef3b33bdcb7bc235ec36acc8c1d52370c78154a1e7dd270924b55b77f9133`、`ev_3cea321d46021c842ca71a7f2d2901c1a71b23f14e5c50e83ebf86107d32b571` | trace `Activity.Cthrow.mo13strictfp` / `p004class.Cwhile.mo8continue` | 前者由 `attachBaseContext` 虚调用；后者的**精确方法 ID** 无直接调用者（虚分派/反射不在覆盖率内） |
+
+**启动链、root 部署与命令编排**
+
+| Evidence ID | 操作 | 关键事实 |
+|---|---|---|
+| `ev_d7793d73557fff818ded2b1abe696998a329da314e89fff2052f44f4e1c69588` | `inspect_android_method` `Intent.Cnew.m95package` | 把 `assets/main.jar` 写到 device-protected cache；拼 `(<CLASSPATH=…> /system/bin/app_process64 -Xnoimage-dex2oat --nice-name=<pkg>:root:daemon /system/bin <component> com.topjohnwu.superuser.internal.RootServerMain '<component>' <uid> daemon >/dev/null 2>&1)&`；`start` 模式用 `:root:<userId>` |
+| `ev_769bd762a65d13156f9a2a9e925f422c63e5ce7079331b1e9f6d40e35f46d4c7` | `inspect_android_method` `Intent.Cimport.m83default` | 依次尝试 `Runtime.exec("su","--mount-master")` → `su` → `sh`；结果码 <1 视为失败 |
+| `ev_5c94b6e924ea1a437e525806f36b3a69a5f7958a2045bdeb075eda2476936818` | `inspect_android_method` `Service.Cthrow.m124volatile` | 读 `ro.product.cpu.abilist` 选 `assets/bin/<abi>.zip`，解到 `<filesDir>/bin`，递归 `setExecutable`，建 `<filesDir>/home`，删旧 `sh` |
+| `ev_7bcbd9360e0547e19539eab2235d674129f999a5c7b8146db98e713eda385795` | `trace_android_references` `Service.Cthrow.m124volatile` | 2 个 using node：`SplashActivity.run`、`p012final.Cpublic.onPreferenceClick` |
+| `ev_0de0c8a6fb5f04d2cc8599a961a94261ed856b1bc9fb644a1ed71efca5d8dd94` | `inspect_android_method` `Service.Cthrow.m122private` | `export _ENV_DIR=<filesDir>`、`export PATH=$_ENV_DIR/bin:$PATH HOME=$_ENV_DIR/home`、`cd $HOME` |
+| `ev_6e2a022ab3d9b2be7338a72c60a281c025eb60ab782b59153f7b26e9097530bf` | `inspect_android_method` `Service.Cthrow.m118abstract` | `openRawResource(R.raw.root_shrc)` → `source` 进同一个 shell；脚本输出必须为 `"0"` |
+| `ev_e741804a10ae9a3129b2029e8f0fe1169c193e45a2febd9d78bd73f6b08273bd` | `trace_android_references` `Service.Cthrow.m118abstract` | **恰好 1 个 using node**：`p012final.Creturn.onServiceConnected`，`INVOKE_STATIC`，DEX code-unit 22；`coverage=complete`（仅直接调用） |
+| `ev_f208157b35f815736ce33c778f068725bf8a6da143c04807d948cc5d0bf458fc` | `inspect_android_method` `p012final.Creturn.onServiceConnected` | binder 非空 → `m920extends`；接口非空 → 继续；否则若 `f1645continue != null` 走 `m118abstract` 兜底；再否则显示 `root_service_start_failure` |
+| `ev_bcd0b1f6a09a55d7f216836fca19fdfa90605a13db22e91a83e7f33a4fddb396` | `inspect_android_method` `p009else.Cimport.m920extends` | `binder == null` 时把 `f1644abstract` / `f1645continue` / `f1651strictfp` 全部清空；否则包装 `IRootManager`、注册 Messenger、取 `IBackupManager` 与文件系统 binder |
+| `ev_7c2d355d3c69c69ebc96240f9bdf520beb8450c99dbbd84bbe4481f60f08a534` | `inspect_android_method` `p009else.Cimport.onCreate` | 创建 libsu 主 shell：`f71extends=10`、`f70default=11L`（docs 中的 flags/timeout） |
+| `ev_8354ddbe7a2b2eace863f00fc247447d41b0ad90a3af96b21bd40c4057b3abf8` | `inspect_android_class` `Intent.Cclass` | 13 方法，含 `c(int, Intent): IBinder`；这是 `onBind` 虚分派的 using node |
+
+**AIDL 契约**
+
+| Evidence ID | 操作 | 关键事实 |
+|---|---|---|
+| `ev_4c2c2f80d5a92e5894847e33baf2863072a27053cf055a93791f78ca49b61c36` | `inspect_android_method` `p004class.Cnative.<init>` | `attachInterface(this, "r2ixzp.toolkit.aidl.IRootManager")` |
+| `ev_df8361cfb2a6ce31a1b32283a2ad407dd2854802ccec42d21563bb78f96b66ee` | `inspect_android_method` `p004class.Cnative.mo478import` | 懒创建 `Cthrow` 并 `attachInterface(..., "r2ixzp.toolkit.aidl.IBackupManager")` |
+| `ev_96a43a270a80dd9a2fbdee00877f8cb7abca1bf67611bd3a41eb7682da41b20b` | `inspect_android_method` `p004class.Cnative.mo480protected` | 返回单例 `Intent.Cthrows`（文件系统服务 binder） |
+| `ev_fba9b13b0b301ed2a230b9f8422c21a0beedb7faf8f4f2254f41e22f7234fdea` | `inspect_android_class` `p032this.Cswitch` | **13 方法**，对应 `IRootManager` 的 13 个 AIDL 方法 |
+| `ev_59df99134c415375787fa6a6686da1c5a668fc41cc1a61e23ad6ab82006a1382` | `inspect_android_class` `p032this.Cpublic` | **2 方法**（`mo485instanceof`、`mo486native`），对应 `IBackupManager` |
+| `ev_407e33bb2316179b84c53f0ddd8db6d12872e72be2bd255e1b208a5cb3b5f770` | `inspect_android_class` `p004class.Cnative` | 15 方法（构造 + 13 IRootManager + `mo478import`/`mo480protected` 等） |
+
+**备份 / 恢复命令与元数据**
+
+| Evidence ID | 操作 | 关键事实 |
+|---|---|---|
+| `ev_316f6ad8e0e328ae8585466f3e4bf9d1b962e5c221d947e834fe639d701adbe1` | `inspect_android_method` `c.Cimport.m435extends` | `String.format("app_backup %s %s '%s'", pkg, time, modes)` |
+| `ev_17919a1afd5fa5e3eaf5e77f8e767d96d6ffac46f7d54be8d63697356e58ebeb` | `inspect_android_method` `c.Cimport.m437package` | `String.format("app_restore %s %s '%s'", pkg, time, modes)`；含 `apk` 或已安装才允许 |
+| `ev_08d42e0de441f37b28842baef331f791911180aff776e3863186c91b69c160ce` | `inspect_android_method` `c.Cimport.m436finally` | `app_init %s %s %s %s` 与 `test $? -eq 0 && compress_init %s %s` |
+| `ev_5b377879e92d6ecb371662a5cedf415190869b7c8603e4dd084237540ca75ca7` | `inspect_android_method` `p003catch.Cthrow.<clinit>` | fastjson2 全局 flags = `NotWriteDefaultValue` + `IgnoreNonFieldGetter`；备份文件正则 `([0-9]+-)[a-z]+(?:_[a-z]+)?\.tar(?:\.[a-z]+)?` |
+
+### 8.3 本次修正 / 新确认
+
+1. **`onBind` 的真实混淆名是 `mo8continue`**（不是 `onBind`）。`Activity.Cthrow` 定义抽象方法，`Intent.Cclass.c` 在 DEX offset 103 虚调用它；`p004class.Cwhile` 覆盖它并执行签名门禁。
+2. **XOR 密钥是运行时派生，不是编译期常量折叠**：`p005const.Cthrow.<init>` 先置 1047；`Activity.Cthrow.attachBaseContext` 末尾虚调用 `mo13strictfp()`，后者计算 `((1047 ^ 1113) ^ getPackageName().length()) + 13`。本包 `r2ixzp.toolkit` 长度 14、versionCode 1113 → 77。`p004class.Cwhile.f665package = 77` 是另一个常量（门禁中未使用），不能据此说密钥是编译期折叠。
+3. **`root_shrc.sh` 的唯一直接加载点**：`Service.Cthrow.m118abstract` 只有 1 个直接 using node（`p012final.Creturn.onServiceConnected`，DEX offset 22）。反射/动态调用仍属未知。
+4. **二进制部署有两个入口**：`SplashActivity.run` 与设置页 `p012final.Cpublic.onPreferenceClick`；都调用 `Service.Cthrow.m124volatile`。
+5. **AIDL 接口名只存在于字符串**：`r2ixzp.toolkit.aidl.IRootManager` / `IBackupManager` 不是顶层类名；分别由 `p004class.Cnative.<init>` 和 `p004class.Cnative.mo478import` 通过 `attachInterface` 注册。
+6. **`p004class.Cimport` 不是备份编排器**：它是 WindowInsets/无障碍相关的工具类；真正的编排器是 `c.Cimport`（JADX 同名碰撞，阅读时注意包名）。
+7. **Java 侧命令集**：除 `app_backup`/`app_restore` 外，还有 `app_init`、`compress_init`；`app_sort` 仅作为 DEX 字符串出现，调用点尚未确认（保持未知）。
+
+### 8.4 仍未覆盖 / 限制（照抄 REA 限制）
+
+- **静态观测，不是执行证据**：APK 从未运行；root shell、`su --mount-master`、SELinux/uid 行为均未动态验证。
+- **引用覆盖率**：`trace_android_references` 统计的是精确方法 ID 的 using node；虚分派、反射、动态拼接的命令不在覆盖内。`p004class.Cwhile.mo8continue` 与 `p005const.Cthrow.mo13strictfp` 的精确 ID 直接调用者为 0，但其基类方法的虚调用已被捕获。
+- **签名**：`inspect_android_package` 明示不做签名验证；证书摘要仍来自 `keytool` 外部观测。
+- **原生二进制**：`assets/bin/*` 的 `toolkit` 语义来自 `readelf`/`objdump` 直接观测，不在 REA 台账内；`busybox`/`zstd` 仅确认版本字符串。
+- **`app_sort` / 部分 UI 偏好**：字符串存在，调用链未逐一确认。
+- **动态 root 验证**：无设备/模拟器。
+
+### 8.5 复现
+
+```bash
+npx -y rea-agents@6.7.0 doctor --client claude_code --json
+# MCP 会话内：
+#   inspect_android_package path="/home/via/BackupToolkit/BackupToolkit v1.1.1.apk" detail="summary"
+#   inspect_android_class  path=... class_name="p004class.Cwhile"
+#   inspect_android_method path=... class_name="p004class.Cwhile" method_name="mo8continue" overload_index=0
+#   trace_android_references path=... class_name="Service.Cthrow" method_name="m118abstract" overload_index=0
+```

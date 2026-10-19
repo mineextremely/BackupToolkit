@@ -73,7 +73,8 @@ re/
 | 缺陷与风险 | ✅ 完成（12 条） | `07` |
 | 重构蓝图（架构/模块/格式 v2/状态机） | ✅ 完成（设计层） | `08` |
 | 格式 v2 清单 schema + 恢复状态迁移表 + 错误码表 | ⬜ **待细化**（下一步） | `08` §4/§5/§7 还偏概览 |
-| 代码级 REA Evidence 化 | ⚠️ 阻塞 | REA 在 Windows 上派生 JADX 子进程失败（见 §6） |
+| 代码级 REA Evidence 化 | ✅ 关键链路完成 | `00` §8：门禁/启动/root 部署/AIDL/命令已产出 Evidence ID（JADX 0.7.1，class_count=656）；UI 死代码等未逐条重跑 |
+| 原生二进制（`assets/bin/*`） | ✅ 完成 | 2026-10-19 静态检查：无 `lib/*.so`；12 个 ELF 中 `toolkit` 已完整还原，`busybox`/`zstd` 为第三方已知构建 |
 | 动态验证（真机 root 行为） | ⚠️ 缺设备 | `07` §4 |
 | 重构实现 | ⬜ 未开始 | — |
 
@@ -125,15 +126,19 @@ python3 re/scripts/decode_xor_strings.py
 
 ## 6. REA（MCP）环境状态
 
+记录于 2026-10-19，WSL2（Debian 13 / armbian trixie 用户态）。
+
 | 项 | 状态 |
 |---|---|
-| skill `reverse-engineer-anything` | 已装（v42 / 207 工具），位于 `~/.agents/skills/`；`~/.claude`、`~/.cc-switch` 另有同名副本（建议只留一份） |
-| DSH MCP 注册 | ✅ 已修：`%APPDATA%\dsh-desktop\harness\cordis.patch.yml` 加 `rea-mcp`（`@deepseek-ai/dsh-mcp-client` → `npx -y rea-agents@6.5.0 mcp`）；重启后会话内 207 工具可用 |
-| `apktool` provider | ✅ `REA_APKTOOL_COMMAND=…\rea-tools\apktool.cmd`（apktool 3.0.3） |
-| `jadx` provider | ⚠️ **REA 6.5.0 在 Windows 上的派生 bug**：JAR（sha256 `6e5eacf5…ff75`，与 REA 审计值一致）与 `ReaJadxBridge` 手工运行时都能正常握手（`serverInfo={rea-jadx-bridge,1}`），但 REA 自己 spawn 后 stdout/stderr 双双为空 → `Unexpected end of JSON input` |
-| hopper / ghidra / ida / jeb / binwalk / tshark / sigrok / wabt / pwntools / wakaru | 未配置（与 APK 任务无关） |
+| skill `reverse-engineer-anything` | ✅ 已装 v42 / 207 工具，位于 `~/.claude/skills/reverse-engineer-anything/`；`doctor` 判定 `skill.state=aligned` |
+| Claude Code MCP 注册 | ✅ `~/.claude.json` → `npx -y rea-agents@6.7.0 mcp`，`claude mcp list` 显示 Connected；live server `rea-agents 6.7.0` / SDK `2.3.1` / 207 tools |
+| `jadx` provider | ✅ 健康：`REA_JADX_MCP_JAR=/home/via/jadx/jadx-headless-mcp-0.7.1-all.jar`（定义在 `~/.bashrc`），sha256 `6e5eacf5…ff75`；手工握手 `serverInfo={jadx-headless-mcp,0.7.1}`、26 工具；Java 21.0.12.1。live MCP 中 Android 工具 `available=true`，`inspect_android_package` 端到端成功（`r2ixzp.toolkit` 1.1.1/1113，class_count=656，resource_count=93） |
+| `apktool` provider | ✅ 可用：`/usr/local/bin/apktool` **3.0.3**（`command_source=environment`），已高于 CVE-2024-21633 的修复线 2.9.2 |
+| hopper / ghidra / ida / kuna / jeb / binwalk / tshark / sigrok / wabt / pwntools / wakaru | 未配置（与 APK 任务无关） |
 
-**因此在 WSL2/Linux 下优先做的一件事**：在 Linux 上重跑 `rea inspect-android-package`，把 `01`–`08` 里的代码级结论升级成带 Evidence ID 的 REA 记录（Linux 走 POSIX 进程边界，大概率没有 Windows 那个 bug）。
+Windows 上 REA 6.5.0 派生 JADX 子进程失败的 bug 在 Linux（POSIX owned-process boundary）**未复现**；`npx -y rea-agents@6.7.0 doctor --client claude_code --json` 返回 `healthy=true`。
+
+**代码级 Evidence 已完成**：APK 已放回仓库根目录；`inspect_android_package` / `inspect_android_class` / `inspect_android_method` / `trace_android_references` 已产出 §8 的 Evidence 表。`apktool` 3.0.3 可用，资源/清单解码不再受阻。
 
 证据台账与全部 Evidence ID 见 `docs/rea/00-REA证据台账.md`。
 
@@ -146,7 +151,7 @@ python3 re/scripts/decode_xor_strings.py
    - 恢复状态迁移表（`Preflight→Prepare→Extract→Install→Commit→Verify→Cleanup`，每状态失败去向）；
    - 错误码表（`E_UID_UNKNOWN`、`E_ARCHIVE_UNSAFE`、`E_SPACE`、`E_INSTALL_FAILED`…）。
 2. **v1→v2 只读兼容适配器**的字段映射表（`user→internal_data`、`data→external_data`）。
-3. **（可选）Linux 下补 REA 代码级 Evidence**，交叉验证 `onBind` 门禁与 `root_shrc.sh` 唯一加载点。
+3. ~~（可选）Linux 下补 REA 代码级 Evidence~~ ✅ **已完成**：`onBind` 门禁（`mo8continue`）、XOR 密钥运行时派生、`root_shrc.sh` 唯一直接加载点均已产出 Evidence ID，见 `00` §8。
 4. **（可选）动态验证**：真机 root 环境跑一次「备份→卸载→恢复→应用能启动」闭环，核对 `07` 里列出的 uid/SELinux 猜测风险。
 5. 之后才进入实现（M0 环境自检 → M1 备份 → M2 恢复 → M3 兼容/多用户 → M4 进度/加密）。
 
