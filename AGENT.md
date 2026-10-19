@@ -36,11 +36,14 @@ docs/rea/
   05-功能清单.md              功能矩阵、三档选项语义、死代码清单
   06-混淆与防篡改.md          R8 关键字重命名、XOR 字符串表、签名自校验门禁
   07-缺陷与风险.md            正确性缺陷、安全风险、兼容性风险
-  08-重构蓝图.md              ★ 目标架构、模块边界、格式 v2、恢复状态机、里程碑
+  08-重构蓝图.md              ★ 目标架构、模块边界、格式 v2 概览、里程碑
+  09-格式v2规范.md            ★ 格式细化：目录/清单/字段/哈希/原子写/v1 适配
+  10-恢复状态机与错误码.md    ★ 恢复细化：状态/失败矩阵/回滚/journal/错误码
   附录A-root_shrc-注释.md     ★ 内嵌 shell 引擎全文 + 逐段注释（重构最关键参考）
   assets/
     root_shrc.original.sh         内嵌脚本原始件（sha256 5744ba42…101b，8650 B）
     change_log.original.txt       作者更新日志（推断迭代史用）
+    format-v2.schema.json         v2 单次备份 manifest 的 JSON Schema（草案）
 re/
   README.md                  分析工作区说明（产物不入库，可重新生成）
   scripts/                   可复跑的分析脚本（入库）
@@ -71,8 +74,8 @@ re/
 | 功能清单 / 死代码 | ✅ 完成 | `05` |
 | 混淆 / 防篡改 | ✅ 完成（含门禁绕过点） | `06` |
 | 缺陷与风险 | ✅ 完成（12 条） | `07` |
-| 重构蓝图（架构/模块/格式 v2/状态机） | ✅ 完成（设计层） | `08` |
-| 格式 v2 清单 schema + 恢复状态迁移表 + 错误码表 | ⬜ **待细化**（下一步） | `08` §4/§5/§7 还偏概览 |
+| 重构蓝图（架构/模块/格式 v2/状态机） | ✅ 完成（概览；细化见 `09`/`10`） | `08` |
+| 格式 v2 清单 schema + 恢复状态迁移表 + 错误码表 | ✅ 完成（设计稿） | `09`、`10`、`assets/format-v2.schema.json` |
 | 代码级 REA Evidence 化 | ✅ 关键链路完成 | `00` §8：门禁/启动/root 部署/AIDL/命令已产出 Evidence ID（JADX 0.7.1，class_count=656）；UI 死代码等未逐条重跑 |
 | 原生二进制（`assets/bin/*`） | ✅ 完成 | 2026-10-19 静态检查：无 `lib/*.so`；12 个 ELF 中 `toolkit` 已完整还原，`busybox`/`zstd` 为第三方已知构建 |
 | 动态验证（真机 root 行为） | ⚠️ 缺设备 | `07` §4 |
@@ -146,14 +149,17 @@ Windows 上 REA 6.5.0 派生 JADX 子进程失败的 bug 在 Linux（POSIX owned
 
 ## 7. 下一步（按优先级）
 
-1. **细化格式 v2 与恢复状态机**（唯一还虚的部分，见 `08` §4/§5/§7）：
-   - 单次备份清单的字段表（含 `uid` / `selinuxContext` / `signerSha256` / `parts[].sha256`）；
-   - 恢复状态迁移表（`Preflight→Prepare→Extract→Install→Commit→Verify→Cleanup`，每状态失败去向）；
-   - 错误码表（`E_UID_UNKNOWN`、`E_ARCHIVE_UNSAFE`、`E_SPACE`、`E_INSTALL_FAILED`…）。
-2. **v1→v2 只读兼容适配器**的字段映射表（`user→internal_data`、`data→external_data`）。
-3. ~~（可选）Linux 下补 REA 代码级 Evidence~~ ✅ **已完成**：`onBind` 门禁（`mo8continue`）、XOR 密钥运行时派生、`root_shrc.sh` 唯一直接加载点均已产出 Evidence ID，见 `00` §8。
-4. **（可选）动态验证**：真机 root 环境跑一次「备份→卸载→恢复→应用能启动」闭环，核对 `07` 里列出的 uid/SELinux 猜测风险。
-5. 之后才进入实现（M0 环境自检 → M1 备份 → M2 恢复 → M3 兼容/多用户 → M4 进度/加密）。
+1. ~~细化格式 v2 与恢复状态机~~ ✅ **已完成**：
+   - `09-格式v2规范.md`：目录布局、单次备份 manifest 字段表（`package.appId/uid`、`signerSha256`、`selinux`、`parts[].sha256`）、
+     原子写协议、空间预检、v1 只读适配与 `reindex`/`migrate`；
+   - `10-恢复状态机与错误码.md`：`Preflight→Prepare→Extract→Install→Commit→Verify→Cleanup` 迁移表、失败矩阵、
+     Commit/Rollback 协议、退出码与 v1 输出映射、40+ 稳定错误码；
+   - `assets/format-v2.schema.json`：JSON Schema 2020-12 草案。
+2. ~~v1→v2 只读兼容适配器字段映射~~ ✅ **已完成**：`09` §5（含 `apk→package`、`user_de→internal_device_protected`、`obb→apk_obb`）。
+3. **（可选）动态验证**：真机 root 跑一次「备份→卸载→恢复→应用能启动」闭环，核对 `07` 的 uid/SELinux 猜测风险。
+   当前无设备，保持 ⚠️；这是进入实现前最有价值的验证。
+4. **进入实现前需用户确认**：按 `08` §9 的 M0 → M1 → M2 推进。当前仓库约定仍是「只产出分析文档，不写实现代码」；
+   未得到明确指示前不要开始写业务代码。
 
 ---
 
@@ -162,6 +168,7 @@ Windows 上 REA 6.5.0 派生 JADX 子进程失败的 bug 在 Linux（POSIX owned
 - **不要覆盖** `README.md` / `LICENSE`（远程已有）。
 - **不要提交** APK、`re/tools`、`re/bin`、`re/apktool`、`re/jadx`、`re/mainjar`（体积 + 第三方内容）。
 - 引用结论时**带上证据来源**：优先 `docs/rea/00` 里的 Evidence ID；次之标注 `re/jadx/...:行号`（属「静态反编译观测」，非 REA 台账内证据）。
+- 格式 v2 的字段/枚举变更必须同步 `09`、`10` 与 `docs/rea/assets/format-v2.schema.json`；错误码只追加、不复用。
 - 区分 **观测 / 推断 / 未知**：`01` §3「来源判定」与 `06` §3 是典型的**推断**，不要把「疑似上游 DataBackup」当事实。
 - 重构方案里**明确禁止照抄**：`eval` 拼 tar 参数、`alias` 依赖同一 shell 会话、uid/SELinux 猜测、`mv` 失败静默、`settings put global` 全局副作用、`pm install -i com.android.vending` 伪造来源（详见 `08` §10）。
 - 提交信息用中文短句 + 影响范围，例如：`docs(rea): 细化格式 v2 清单字段表`。
