@@ -86,7 +86,15 @@
       "pattern": "^[^\\u0000-\\u001f\\u007f]*$"
     },
     "encryption": {
-      "type": ["object", "null"]
+      "type": ["object", "null"],
+      "properties": {
+        "alg": { "type": "string" },
+        "kdf": { "type": "string" },
+        "nonce": { "type": "string" },
+        "tag": { "type": "string" },
+        "chunkSize": { "type": "integer", "minimum": 1 }
+      },
+      "additionalProperties": true
     },
     "origin": {
       "$ref": "#/$defs/origin"
@@ -282,7 +290,11 @@
         "sha256": { "type": "string", "pattern": "^[0-9a-f]{64}$" },
         "entryCount": { "type": "integer", "minimum": 0 },
         "uncompressedBytes": { "type": "integer", "minimum": 0 },
-        "sourcePath": { "type": "string" },
+        "sourcePath": {
+          "type": "string",
+          "deprecated": true,
+          "description": "Deprecated; v2.0 writers MUST NOT emit this field."
+        },
         "excludes": { "type": "array", "items": { "type": "string" } },
         "seq": { "type": "integer", "minimum": 0 },
         "plaintextSha256": {
